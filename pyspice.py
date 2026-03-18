@@ -1,6 +1,13 @@
 import pygame
 import sys
 import random
+from enum import Enum, auto
+
+
+class GameState(Enum):
+    PLAY = auto()
+    GAME_OVER = auto()
+    QUIT = auto()
 
 
 class Player(pygame.sprite.Sprite):
@@ -9,6 +16,7 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         self.image = image
         self.rect = self.image.get_rect(center=(1024 / 2, 600))
+        self.mask = pygame.mask.from_surface(self.image)
 
     def update(self):
         pos = pygame.math.Vector2(0, 0)
@@ -70,6 +78,39 @@ class Monster(Entity):
         super().update()
 
 
+class Score:
+
+    def __init__(self):
+        self.font = pygame.font.Font(None, 100)
+        self.score = 0
+        self.flash = 0
+        self.update(0)
+
+    def update(self, count):
+        if count > 0:
+            self.score += count
+            self.flash = 255
+        self.score_text = self.font.render(f"{self.score}",
+                                           True,
+                                           (self.flash,
+                                            0,
+                                            255 - self.flash))
+        self.flash = max(0, self.flash - 5)
+
+    def draw(self, screen):
+        screen.blit(self.score_text, (10, 10))
+
+
+class Message:
+
+    def __init__(self):
+        self.font = pygame.font.Font(None, 80)
+        self.text = self.font.render("Game over", True, (100, 255, 255))
+
+    def draw(self, screen):
+        screen.blit(self.text, (1024 / 2 - self.text.get_width() / 2, 300))
+
+
 class Game:
 
     def __init__(self):
@@ -77,8 +118,7 @@ class Game:
         self.screen = pygame.display.set_mode((1024, 768))
         pygame.display.set_caption("PySpice")
 
-        self.running = True
-        self.score = 0
+        self.state = GameState.PLAY
         # Player
         self.player = Player(pygame.image.load("spaceship.png"))
         self.playerGroup = pygame.sprite.Group()
@@ -91,17 +131,19 @@ class Game:
         # Monsters
         self.monstersGroup = pygame.sprite.Group()
         self.monsterImage = pygame.image.load("shark.png")
-
+        # UI
+        self.score = Score()
+        self.message = Message()
 
     def processEvents(self):
         # Events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.running = False
+                self.state = GameState.QUIT
 
         # Shoot
         isShooting = self.get_shoot()
-        if isShooting:
+        if isShooting and self.state == GameState.PLAY:
             Bullet(self.bulletImage,
                    self.playerBulletsGroup,
                    self.player.rect.center,
@@ -117,7 +159,7 @@ class Game:
         return False
 
     def run(self):
-        while self.running:
+        while self.state != GameState.QUIT:
             # Events
             self.processEvents()
             # Bullets
@@ -129,22 +171,31 @@ class Game:
                         self.monstersGroup,
                         random.randrange(50, 1024 - 50, 1))
             # Player
-            self.player.update()
-            pygame.display.update()
+            if self.state == GameState.PLAY:
+                self.player.update()
             # Bullets destroy monsters
             bang = pygame.sprite.groupcollide(self.playerBulletsGroup,
                                               self.monstersGroup,
                                               True,
                                               True,
                                               pygame.sprite.collide_mask)
-            if len(bang) > 0:
-                self.score += len(bang)
-                print(self.score)
+            self.score.update(len(bang))
+            # Monsters destroy player
+            if pygame.sprite.groupcollide(self.monstersGroup,
+                                          self.playerGroup,
+                                          True,
+                                          True,
+                                          pygame.sprite.collide_mask):
+                self.state = GameState.GAME_OVER
             # Display everythinvg
             self.screen.fill((0, 0, 40))
             self.playerBulletsGroup.draw(self.screen)
             self.monstersGroup.draw(self.screen)
             self.playerGroup.draw(self.screen)
+            self.score.draw(self.screen)
+            if self.state == GameState.GAME_OVER:
+                self.message.draw(self.screen)
+            pygame.display.update()
             # Clock
             pygame.time.Clock().tick(60)
 
