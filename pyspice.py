@@ -3,108 +3,14 @@ import sys
 import random
 
 
-class Sprite:
+class Player(pygame.sprite.Sprite):
 
     def __init__(self, image):
+        super().__init__()
         self.image = image
-        self.set_position(pygame.math.Vector2((0, 0)))
-
-    def display(self, screen):
-        screen.blit(self.image, self.pos)
-
-    def set_position(self, pos):
-        self.pos = pos - pygame.math.Vector2((self.image.get_width() / 2, self.image.get_height() / 2))
-
-
-class Bullet:
-
-    def __init__(self, image, pos, velocity):
-        self.image = image
-        self.pos = pos
-        self.velocity = velocity
-
-    def display(self, screen):
-        screen.blit(self.image,
-                    self.pos - pygame.math.Vector2
-                    ((self.image.get_width() / 2,
-                      self.image.get_height() / 2)))
+        self.rect = self.image.get_rect(center=(1024 / 2, 600))
 
     def update(self):
-        self.pos += self.velocity
-        if self.pos.x < -50 or self.pos.x > 1024 + 50 or self.pos.y < -50 or self.pos.y > 768 + 50:
-            return False
-        return True
-
-
-class Monster:
-
-    def __init__(self, image, x):
-        self.image = image
-        self.pos = pygame.math.Vector2((x, -40))
-        self.init = x
-        self.diff = 4
-
-    def display(self, screen):
-        screen.blit(self.image,
-                    self.pos - pygame.math.Vector2
-                    ((self.image.get_width() / 2,
-                      self.image.get_height() / 2)))
-
-    def update(self):
-        self.pos.y += 2
-        self.pos.x += self.diff
-        if abs(self.pos.x - self.init) > 100:
-            self.diff *= -1
-        if self.pos.x < -50 or self.pos.x > 1024 + 50 or self.pos.y < -50 or self.pos.y > 768 + 50:
-            return False
-        return True
-
-
-class Game:
-
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((1024, 768))
-        pygame.display.set_caption("PySpice")
-
-        self.running = True
-        self.mainPos = pygame.math.Vector2(1024 / 2, 600)
-        self.ship = Sprite(pygame.image.load("spaceship.png"))
-        self.lastShoot = 0
-        self.playerBullets = []
-        self.bulletImage = pygame.image.load("bullet.png")
-        self.bulletVelocity = pygame.math.Vector2(0, -20)
-        self.monsterImage = pygame.image.load("shark.png")
-        self.monsters = [Monster(self.monsterImage, 200), Monster(self.monsterImage, 500)]
-
-    def processEvents(self):
-        # Events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-
-        # Movement
-        self.mainPos += (self.get_move() / 20)
-        self.mainPos.x = pygame.math.clamp(self.mainPos.x, 64, 1024 - 64)
-        self.mainPos.y = pygame.math.clamp(self.mainPos.y, 64, 768 - 64)
-
-        # Shoot
-        isShooting = self.get_shoot()
-        if isShooting:
-            self.playerBullets.append(Bullet(self.bulletImage,
-                                             self.mainPos.copy(),
-                                             self.bulletVelocity))
-
-    def get_shoot(self):
-        keystate = pygame.key.get_pressed()
-        if keystate[pygame.K_SPACE]:
-            t = pygame.time.get_ticks()
-            if t - self.lastShoot > 100:
-                self.lastShoot = t
-                return True
-        return False
-
-    def get_move(self):
         pos = pygame.math.Vector2(0, 0)
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT]:
@@ -115,34 +21,130 @@ class Game:
             pos.y -= 100
         if keystate[pygame.K_DOWN]:
             pos.y += 100
-        return pos
+        self.rect.center = self.rect.center + pos / 20
+        self.rect.centerx = pygame.math.clamp(self.rect.centerx, 64, 1024 - 64)
+        self.rect.centery = pygame.math.clamp(self.rect.centery, 64, 768 - 64)
+
+
+class Entity(pygame.sprite.Sprite):
+
+    def __init__(self, image, group, pos):
+        super().__init__()
+        self.image = image
+        self.group = group
+        self.rect = self.image.get_rect(center=pos)
+        self.mask = pygame.mask.from_surface(self.image)
+        self.group.add(self)
+
+    def update(self):
+        if self.rect.centerx < -50 or self.rect.centerx > 1024 + 50 or self.rect.centery < -50 or self.rect.centery > 768 + 50:
+            self.destroy()
+
+    def destroy(self):
+        self.valid = False
+        self.group.remove(self)
+
+
+class Bullet(Entity):
+
+    def __init__(self, image, group, pos, velocity):
+        super().__init__(image, group, pos)
+        self.velocity = velocity
+
+    def update(self):
+        self.rect.center = self.rect.center + self.velocity
+        super().update()
+
+
+class Monster(Entity):
+
+    def __init__(self, image, group, x):
+        super().__init__(image, group, (x, -40))
+        self.orig = x
+        self.diff = 4
+
+    def update(self):
+        self.rect.center = self.rect.center + pygame.math.Vector2(self.diff, 2)
+        if abs(self.rect.centerx - self.orig) > 100:
+            self.diff *= -1
+        super().update()
+
+
+class Game:
+
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((1024, 768))
+        pygame.display.set_caption("PySpice")
+
+        self.running = True
+        self.score = 0
+        # Player
+        self.player = Player(pygame.image.load("spaceship.png"))
+        self.playerGroup = pygame.sprite.Group()
+        self.playerGroup.add(self.player)
+        self.lastShoot = 0
+        # Bullets
+        self.playerBulletsGroup = pygame.sprite.Group()
+        self.bulletImage = pygame.image.load("bullet.png")
+        self.bulletVelocity = pygame.math.Vector2(0, -20)
+        # Monsters
+        self.monstersGroup = pygame.sprite.Group()
+        self.monsterImage = pygame.image.load("shark.png")
+
+
+    def processEvents(self):
+        # Events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+
+        # Shoot
+        isShooting = self.get_shoot()
+        if isShooting:
+            Bullet(self.bulletImage,
+                   self.playerBulletsGroup,
+                   self.player.rect.center,
+                   self.bulletVelocity)
+
+    def get_shoot(self):
+        keystate = pygame.key.get_pressed()
+        if keystate[pygame.K_SPACE]:
+            t = pygame.time.get_ticks()
+            if t - self.lastShoot > 100:
+                self.lastShoot = t
+                return True
+        return False
 
     def run(self):
         while self.running:
             # Events
             self.processEvents()
-            # Clear screen
-            self.screen.fill((0, 0, 40))
             # Bullets
-            remBullets = []
-            for playerBullet in self.playerBullets:
-                if playerBullet.update():
-                    playerBullet.display(self.screen)
-                    remBullets.append(playerBullet)
-            self.playerBullets = remBullets
-            # Monsters
-            remMonsters = []
-            for monster in self.monsters:
-                if monster.update():
-                    monster.display(self.screen)
-                    remMonsters.append(monster)
-            self.monsters = remMonsters
+            self.playerBulletsGroup.update()
+            self.monstersGroup.update()
+
             if random.randrange(1, 100, 1) == 1:
-                self.monsters.append(Monster(self.monsterImage, random.randrange(50, 1024 - 50, 1)))
-            # Ship
-            self.ship.set_position(self.mainPos)
-            self.ship.display(self.screen)
+                Monster(self.monsterImage,
+                        self.monstersGroup,
+                        random.randrange(50, 1024 - 50, 1))
+            # Player
+            self.player.update()
             pygame.display.update()
+            # Bullets destroy monsters
+            bang = pygame.sprite.groupcollide(self.playerBulletsGroup,
+                                              self.monstersGroup,
+                                              True,
+                                              True,
+                                              pygame.sprite.collide_mask)
+            if len(bang) > 0:
+                self.score += len(bang)
+                print(self.score)
+            # Display everythinvg
+            self.screen.fill((0, 0, 40))
+            self.playerBulletsGroup.draw(self.screen)
+            self.monstersGroup.draw(self.screen)
+            self.playerGroup.draw(self.screen)
             # Clock
             pygame.time.Clock().tick(60)
 
