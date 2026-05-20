@@ -140,6 +140,8 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.state = GameState.QUIT
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.state = GameState.QUIT
 
         # Shoot
         isShooting = self.get_shoot()
