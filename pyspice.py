@@ -236,7 +236,7 @@ class Game:
             if rand == 2:
                 Octopus(self.octopusImage, self.monstersGroup, self.fireImage)
 
-            rand = random.randrange(1, 100)
+            rand = random.randrange(1, 200)
             if rand == 1:
                 Present(self.presentImage, self.presentsGroup)
 
