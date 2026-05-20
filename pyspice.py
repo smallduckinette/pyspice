@@ -153,7 +153,7 @@ class Game:
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_SPACE]:
             t = pygame.time.get_ticks()
-            if t - self.lastShoot > 100:
+            if t - self.lastShoot > 200:
                 self.lastShoot = t
                 return True
         return False
